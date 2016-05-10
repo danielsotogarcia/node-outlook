@@ -573,6 +573,101 @@ module.exports = {
   },
 };
 
+ /**
+   * Used to get folders from a folder.
+   * 
+   * @param parameters {object} An object containing all of the relevant parameters. Possible values:
+   * @param parameters.token {string} The access token.
+   * @param [parameters.useMe] {boolean} If true, use the `/Me` segment instead of the `/Users/<email>` segment. This parameter defaults to false and is ignored if the `parameters.user.email` parameter isn't provided (the `/Me` segment is always used in this case).
+   * @param [parameters.user.email] {string} The SMTP address of the user. If absent, the `/Me` segment is used in the API URL.
+   * @param [parameters.user.timezone] {string} The timezone of the user.
+   * @param [parameters.folderId] {string} The folder id. If absent, the API calls the `/User/childfolders` endpoint. Valid values of this parameter are:
+   * 
+   * - The `Id` property of a `MailFolder` entity
+   * - `Inbox`
+   * - `Drafts`
+   * - `SentItems`
+   * - `DeletedItems`
+   * 
+   * @param [parameters.odataParams] {object} An object containing key/value pairs representing OData query parameters. See [Use OData query parameters]{@link https://msdn.microsoft.com/office/office365/APi/complex-types-for-mail-contacts-calendar#UseODataqueryparameters} for details.
+   * 
+   * @param [callback] {function} A callback function that is called when the function completes. It should have the signature `function (error, result)`.
+   * 
+   * @example var outlook = require('node-outlook');
+   * 
+   * // Set the API endpoint to use the v2.0 endpoint
+   * outlook.base.setApiEndpoint('https://outlook.office.com/api/v2.0');
+   * 
+   * // This is the oAuth token 
+   * var token = 'eyJ0eXAiOiJKV1Q...';
+   * 
+   * // Set up oData parameters
+   * var queryParams = {
+   *   '$select': 'ChildFolderCount,ChildFolders,DisplayName,Id,ParentFolderId,TotalItemCount,UnreadItemCount',
+   *   '$orderby': 'ReceivedDateTime desc',
+   *   '$top': 20
+   * };
+   * 
+   * // Pass the user's email address
+   * var userInfo = {
+   *   email: 'sarad@contoso.com'
+   * };
+   * 
+   * outlook.mail.getFolders({token: token, folderId: undefined, odataParams: queryParams, user: userInfo},
+   *   function(error, result){
+   *     if (error) {
+   *       console.log('getMessages returned an error: ' + error);
+   *     }
+   *     else if (result) {
+   *       console.log('getMessages returned ' + result.value.length + ' folders.');
+   *       result.value.forEach(function(folder) {
+   *         console.log('  DisplayName:', folder.DisplayName);
+   *         console.log('  Id:', folder.Id);
+   *         console.log('  ParentFolderId:', folder.ParentFolderId);
+   *         console.log('  TotalItemCount:', folder.TotalItemCount);
+   *         console.log('  UnreadItemCount:', folder.UnreadItemCount);
+   *       });
+   *     }
+   *   });
+   */
+  getFolders: function(parameters, callback){
+    var userSpec = utilities.getUserSegment(parameters);
+    var folderSpec = parameters.folderId === undefined ? '' : getFolderSegment() + parameters.folderId;
+
+    var requestUrl;
+    if(folderSpec != '') {
+      requestUrl = base.apiEndpoint() + userSpec + folderSpec + '/childfolders';
+    }else{
+      requestUrl = base.apiEndpoint() + userSpec + folderSpec + '/MailFolders';
+    }
+
+    var apiOptions = {
+      url: requestUrl,
+      token: parameters.token,
+      user: parameters.user
+    };
+
+    if (parameters.odataParams !== undefined) {
+      apiOptions['query'] = parameters.odataParams;
+    }
+
+    base.makeApiCall(apiOptions, function(error, response) {
+      if (error) {
+        if (typeof callback === 'function') {
+          callback(error, response);
+        }
+      } else if (response.statusCode !== 200) {
+        if (typeof callback === 'function') {
+          callback('REST request returned ' + response.statusCode + '; body: ' + JSON.stringify(response.body), response);
+        }
+      } else {
+        if (typeof callback === 'function') {
+          callback(null, response.body);
+        }
+      }
+    });
+  },
+
 /**
  * Helper function to return the correct name for the folders segment
  * of the request URL. /Me/Folders became /Me/MailFolders in the beta and
